@@ -44,12 +44,13 @@ class FITModuleRemoteFile implements CanvasTypeInterface
                                     'type' => 'Annotation',
                                     'motivation' => 'painting',
                                     'body' => [
-                                        'id' => $media->originalUrl(),
+                                        'id' => $iiifEndpoint . str_replace("/", "%2F", substr($key, 0, -4)) . "/full/max/0/default.jpg",
                                         'type' => 'Image',
+                                        "format" => "image/jpeg",
                                         'service' => [
                                             'id' => $iiifEndpoint . str_replace("/", "%2F", substr($key, 0, -4)),
-                                            'type' => 'ImageService2',
-                                            'profile' => 'http://iiif.io/api/image/2/level2.json',
+                                            'type' => 'ImageService3',
+                                            'profile' => 'level2',
                                         ],
                                     ],
                                     'target' => $controller->url()->fromRoute('iiif-presentation-3/item/canvas', ['media-id' => $media->id()], ['force_canonical' => true], true),
