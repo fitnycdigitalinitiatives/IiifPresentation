@@ -1,4 +1,5 @@
 <?php
+
 namespace IiifPresentation\v3\ControllerPlugin;
 
 use IiifPresentation\ControllerPlugin\AbstractIiifPresentation;
@@ -101,7 +102,8 @@ class IiifPresentation extends AbstractIiifPresentation
         $collection = $this->getItemsCollection($itemIds, $itemSet->displayTitle());
         // Allow modules to modify the collection.
         $args = $this->triggerEvent(
-            'iiif_presentation.3.item_set.collection', [
+            'iiif_presentation.3.item_set.collection',
+            [
                 'collection' => $collection,
                 'item_set' => $itemSet,
             ]
@@ -151,12 +153,52 @@ class IiifPresentation extends AbstractIiifPresentation
         // Manifest thumbnail.
         $primaryMedia = $item->primaryMedia();
         if ($primaryMedia) {
-            $manifest['thumbnail'] = [
-                [
-                    'id' => $primaryMedia->thumbnailUrl('medium'),
-                    'type' => 'Image',
-                ],
-            ];
+            if ($primaryMedia->ingester() == 'remoteFile') {
+                $thumbnailURL = $primaryMedia->mediaData()['thumbnail'];
+                if ($thumbnailURL) {
+                    $manifest['thumbnail'] = [
+                        [
+                            'id' => $thumbnailURL,
+                            'type' => 'Image'
+                        ]
+                    ];
+                }
+            } else {
+                $manifest['thumbnail'] = [
+                    [
+                        'id' => $primaryMedia->thumbnailUrl('medium'),
+                        'type' => 'Image',
+                    ],
+                ];
+            }
+        }
+        // Default required statement if no rights exist
+        $manifest['requiredStatement'] = ["label" => ["en" => ["Attribution"]], "value" => ["en" => ["This resource has been made available online by the Fashion Institute of Technology Gladys Marcus Library"]]];
+        $literalRights = $item->value('dcterms:rights', ['all' => true, 'type' => 'literal']);
+        $requiredStatement = [];
+        foreach ($literalRights as $literalRight) {
+            $requiredStatement[] =  $literalRight;
+        }
+        if ($requiredStatement) {
+            $manifest['requiredStatement'] = ["label" => ["en" => ["Rights"]], "value" => ["en" => [implode(". ", $requiredStatement)]]];
+        }
+        $rights = $item->value('dcterms:rights', ['all' => true, 'type' => 'uri']);
+        $hasrights = false;
+        // Get uri of rights statement, let creative commons take precedence
+        foreach ($rights as $rightsstatement) {
+            if (str_contains($rightsstatement->uri(), "creativecommons.org")) {
+                $manifest['rights'] = $rightsstatement->uri();
+                $hasrights = true;
+                break;
+            }
+        }
+        if (!$hasrights) {
+            foreach ($rights as $rightsstatement) {
+                if (str_contains($rightsstatement->uri(), "rightsstatements.org")) {
+                    $manifest['rights'] = $rightsstatement->uri();
+                    break;
+                }
+            }
         }
         // Manifest homepages (this item is assigned to these sites).
         foreach ($item->sites() as $site) {

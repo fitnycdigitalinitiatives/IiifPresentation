@@ -1,4 +1,5 @@
 <?php
+
 namespace IiifPresentation;
 
 use Laminas\Router\Http;
@@ -8,11 +9,13 @@ return [
         'invokables' => [
             'file' => v2\CanvasType\File::class,
             'iiif' => v2\CanvasType\IiifImage::class,
+            'remoteFile' => v2\CanvasType\FITModuleRemoteFile::class,
         ],
     ],
     'iiif_presentation_v3_canvas_types' => [
         'invokables' => [
             'iiif' => v3\CanvasType\IiifImage::class,
+            'remoteFile' => v3\CanvasType\FITModuleRemoteFile::class,
         ],
         'factories' => [
             'file' => v3\Service\CanvasType\FileFactory::class,

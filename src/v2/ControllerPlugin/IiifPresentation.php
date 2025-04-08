@@ -1,4 +1,5 @@
 <?php
+
 namespace IiifPresentation\v2\ControllerPlugin;
 
 use IiifPresentation\ControllerPlugin\AbstractIiifPresentation;
@@ -134,6 +135,46 @@ class IiifPresentation extends AbstractIiifPresentation
                 ],
             ],
         ];
+        // Manifest thumbnail.
+        $primaryMedia = $item->primaryMedia();
+        if ($primaryMedia) {
+            if ($primaryMedia->ingester() == 'remoteFile') {
+                $thumbnailURL = $primaryMedia->mediaData()['thumbnail'];
+                if ($thumbnailURL) {
+                    $manifest['thumbnail'] = [
+                        [
+                            '@id' => $thumbnailURL,
+                            '@type' => 'dctypes:Image'
+                        ]
+                    ];
+                }
+            } else {
+                $manifest['thumbnail'] = [
+                    [
+                        '@id' => $primaryMedia->thumbnailUrl('medium'),
+                        '@type' => 'dctypes:Image',
+                    ],
+                ];
+            }
+        }
+        // License, let creative commons take precedence
+        $rights = $item->value('dcterms:rights', ['all' => true, 'type' => 'uri']);
+        $hasrights = false;
+        foreach ($rights as $rightsstatement) {
+            if (str_contains($rightsstatement->uri(), "creativecommons.org")) {
+                $manifest['license'] = $rightsstatement->uri();
+                $hasrights = true;
+                break;
+            }
+        }
+        if (!$hasrights) {
+            foreach ($rights as $rightsstatement) {
+                if (str_contains($rightsstatement->uri(), "rightsstatements.org")) {
+                    $manifest['license'] = $rightsstatement->uri();
+                    break;
+                }
+            }
+        }
         foreach ($item->media() as $media) {
             $renderer = $media->renderer();
             if (!$this->canvasTypeManager->has($renderer)) {
