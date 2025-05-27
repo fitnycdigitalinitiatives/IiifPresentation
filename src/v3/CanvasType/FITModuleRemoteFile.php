@@ -9,6 +9,8 @@ class FITModuleRemoteFile implements CanvasTypeInterface
 {
     public function getCanvas(MediaRepresentation $media, ItemController $controller): ?array
     {
+        $mediaId = $media->id();
+        $itemId = $media->item()->id();
         $accessURL = $media->mediaData()['access'];
         $mediaType = $media->mediaType();
         $iiifEndpoint = $controller->settings()->get('fit_module_aws_iiif_endpoint');
@@ -18,7 +20,7 @@ class FITModuleRemoteFile implements CanvasTypeInterface
             $extension = pathinfo($key, PATHINFO_EXTENSION);
             if ($extension == 'tif') {
                 return [
-                    'id' => $controller->url()->fromRoute('iiif-presentation-3/item/canvas', ['media-id' => $media->id()], ['force_canonical' => true], true),
+                    'id' => $controller->url()->fromRoute('iiif-presentation-3/item/canvas', ['media-id' => $mediaId, 'item-id' => $itemId], ['force_canonical' => true], true),
                     'type' => 'Canvas',
                     'label' => [
                         'none' => [
@@ -36,11 +38,11 @@ class FITModuleRemoteFile implements CanvasTypeInterface
                     'metadata' => $controller->iiifPresentation3()->getMetadata($media),
                     'items' => [
                         [
-                            'id' => $controller->url()->fromRoute('iiif-presentation-3/item/annotation-page', ['media-id' => $media->id()], ['force_canonical' => true], true),
+                            'id' => $controller->url()->fromRoute('iiif-presentation-3/item/annotation-page', ['media-id' => $mediaId, 'item-id' => $itemId], ['force_canonical' => true], true),
                             'type' => 'AnnotationPage',
                             'items' => [
                                 [
-                                    'id' => $controller->url()->fromRoute('iiif-presentation-3/item/annotation', ['media-id' => $media->id()], ['force_canonical' => true], true),
+                                    'id' => $controller->url()->fromRoute('iiif-presentation-3/item/annotation', ['media-id' => $mediaId, 'item-id' => $itemId], ['force_canonical' => true], true),
                                     'type' => 'Annotation',
                                     'motivation' => 'painting',
                                     'body' => [
@@ -53,7 +55,7 @@ class FITModuleRemoteFile implements CanvasTypeInterface
                                             'profile' => 'level2',
                                         ],
                                     ],
-                                    'target' => $controller->url()->fromRoute('iiif-presentation-3/item/canvas', ['media-id' => $media->id()], ['force_canonical' => true], true),
+                                    'target' => $controller->url()->fromRoute('iiif-presentation-3/item/canvas', ['media-id' => $mediaId, 'item-id' => $itemId], ['force_canonical' => true], true),
                                 ],
                             ],
                         ],

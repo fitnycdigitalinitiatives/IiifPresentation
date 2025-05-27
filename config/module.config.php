@@ -16,6 +16,7 @@ return [
         'invokables' => [
             'iiif' => v3\CanvasType\IiifImage::class,
             'remoteFile' => v3\CanvasType\FITModuleRemoteFile::class,
+            'remoteCompoundObject' => v3\CanvasType\FITModuleRemoteCompoundObject::class,
         ],
         'factories' => [
             'file' => v3\Service\CanvasType\FileFactory::class,
@@ -155,6 +156,71 @@ return [
                             ],
                         ],
                     ],
+                    // Media that are compound objects can have their own manifests and canvases, etc
+                    'media' => [
+                        'type' => Http\Literal::class,
+                        'options' => [
+                            'route' => '/media',
+                            'defaults' => [
+                                'controller' => 'item',
+                                'action' => 'index',
+                            ],
+                        ],
+                        'may_terminate' => true,
+                        'child_routes' => [
+                            'manifest' => [
+                                'type' => Http\Segment::class,
+                                'options' => [
+                                    'route' => '/:media-id/manifest',
+                                    'defaults' => [
+                                        'action' => 'media-manifest',
+                                    ],
+                                    'constraints' => [
+                                        'media-id' => '\d+',
+                                    ],
+                                ],
+                            ],
+                            'canvas' => [
+                                'type' => Http\Segment::class,
+                                'options' => [
+                                    'route' => '/:media-id/canvas/:index',
+                                    'defaults' => [
+                                        'action' => 'canvas',
+                                    ],
+                                    'constraints' => [
+                                        'index' => '\d+',
+                                        'media-id' => '\d+',
+                                    ],
+                                ],
+                            ],
+                            'annotation-page' => [
+                                'type' => Http\Segment::class,
+                                'options' => [
+                                    'route' => '/:media-id/annotation-page/:index',
+                                    'defaults' => [
+                                        'action' => 'annotation-page',
+                                    ],
+                                    'constraints' => [
+                                        'index' => '\d+',
+                                        'media-id' => '\d+',
+                                    ],
+                                ],
+                            ],
+                            'annotation' => [
+                                'type' => Http\Segment::class,
+                                'options' => [
+                                    'route' => '/:media-id/annotation/:index',
+                                    'defaults' => [
+                                        'action' => 'annotation',
+                                    ],
+                                    'constraints' => [
+                                        'index' => '\d+',
+                                        'media-id' => '\d+',
+                                    ],
+                                ],
+                            ],
+                        ]
+                    ],
                     'item' => [
                         'type' => Http\Literal::class,
                         'options' => [
@@ -214,6 +280,19 @@ return [
                                     ],
                                 ],
                             ],
+                            // 'media-manifest' => [
+                            //     'type' => Http\Segment::class,
+                            //     'options' => [
+                            //         'route' => '/:item-id/media/:media-id/manifest',
+                            //         'defaults' => [
+                            //             'action' => 'manifest',
+                            //         ],
+                            //         'constraints' => [
+                            //             'item-id' => '\d+',
+                            //             'media-id' => '\d+',
+                            //         ],
+                            //     ],
+                            // ],
                             'canvas' => [
                                 'type' => Http\Segment::class,
                                 'options' => [

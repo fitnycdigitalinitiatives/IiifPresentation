@@ -1,4 +1,5 @@
 <?php
+
 namespace IiifPresentation\v3\Controller;
 
 use Laminas\Mvc\Controller\AbstractActionController;
@@ -29,5 +30,13 @@ class ItemController extends AbstractActionController
         $itemId = $this->params('item-id');
         $manifest = $this->iiifPresentation3()->getItemManifest($itemId);
         return $this->iiifPresentation3()->getResponse($manifest);
+    }
+    public function mediaManifestAction()
+    {
+        $mediaId = $this->params('media-id');
+        if ($media = $this->api()->read('media', $mediaId)->getContent()) {
+            $manifest = $this->iiifPresentation3()->getMediaManifest($media->item()->id(), $mediaId);
+            return $this->iiifPresentation3()->getResponse($manifest);
+        }
     }
 }

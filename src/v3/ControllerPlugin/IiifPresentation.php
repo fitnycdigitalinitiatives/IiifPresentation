@@ -211,6 +211,7 @@ class IiifPresentation extends AbstractIiifPresentation
                 'format' => 'text/html',
             ];
         }
+
         foreach ($item->media() as $media) {
             $renderer = $media->renderer();
             if (!$this->canvasTypeManager->has($renderer)) {
@@ -218,22 +219,218 @@ class IiifPresentation extends AbstractIiifPresentation
                 continue;
             }
             $canvasType = $this->canvasTypeManager->get($renderer);
-            $canvas = $canvasType->getCanvas($media, $controller);
-            if (!$canvas) {
-                // A canvas could not be created.
-                continue;
+            // Compound objects return an array of canvases whereas other return just a single
+            if ($renderer == 'remoteCompoundObject') {
+                $canvases = $canvasType->getCanvas($media, $controller);
+                if (!$canvases) {
+                    // A canvas could not be created.
+                    continue;
+                }
+                foreach ($canvases as $canvas) {
+                    // Allow modules to modify the canvas.
+                    $args = $this->triggerEvent(
+                        'iiif_presentation.3.media.canvas',
+                        [
+                            'canvas' => $canvas,
+                            'canvas_type' => $canvasType,
+                            'media' => $media,
+                        ]
+                    );
+                    // Set the canvas to the manifest.
+                    $manifest['items'][] = $args['canvas'];
+                }
+            } else {
+                $canvas = $canvasType->getCanvas($media, $controller);
+                if (!$canvas) {
+                    // A canvas could not be created.
+                    continue;
+                }
+                // Allow modules to modify the canvas.
+                $args = $this->triggerEvent(
+                    'iiif_presentation.3.media.canvas',
+                    [
+                        'canvas' => $canvas,
+                        'canvas_type' => $canvasType,
+                        'media' => $media,
+                    ]
+                );
+                // Set the canvas to the manifest.
+                $manifest['items'][] = $args['canvas'];
             }
-            // Allow modules to modify the canvas.
-            $args = $this->triggerEvent(
-                'iiif_presentation.3.media.canvas',
+        }
+        // Allow modules to modify the manifest.
+        $args = $this->triggerEvent(
+            'iiif_presentation.3.item.manifest',
+            [
+                'manifest' => $manifest,
+                'item' => $item,
+            ]
+        );
+        return $args['manifest'];
+    }
+
+    /**
+     * Get a IIIF Presentation manifest for an Omeka media.
+     *
+     * @see https://iiif.io/api/presentation/3.0/#52-manifest
+     */
+    public function getMediaManifest(int $itemId, int $mediaId)
+    {
+        $controller = $this->getController();
+        $url = $controller->url();
+        $item = $controller->api()->read('items', $itemId)->getContent();
+        $media = $controller->api()->read('media', $mediaId)->getContent();
+        $renderer = $media->renderer();
+        $mediaData = $media->mediaData();
+        $manifest = [
+            '@context' => 'http://iiif.io/api/presentation/3/context.json',
+            'id' => $controller->url()->fromRoute(null, [], ['force_canonical' => true], true),
+            'type' => 'Manifest',
+            'behavior' => ['individuals', 'no-auto-advance'], // Default behaviors
+            'viewingDirection' => 'left-to-right', // Default viewing direction
+            'label' => [
+                'none' => [$item->displayTitle()],
+            ],
+            'summary' => [
+                'none' => [$item->displayDescription()],
+            ],
+            'provider' => [
                 [
-                    'canvas' => $canvas,
-                    'canvas_type' => $canvasType,
-                    'media' => $media,
-                ]
-            );
-            // Set the canvas to the manifest.
-            $manifest['items'][] = $args['canvas'];
+                    'id' => $controller->url()->fromRoute('top', [], ['force_canonical' => true]),
+                    'type' => 'Agent',
+                    'label' => ['none' => [$controller->settings()->get('installation_title')]],
+                ],
+            ],
+            'seeAlso' => [
+                [
+                    'id' => $controller->url()->fromRoute('api/default', ['resource' => 'items', 'id' => $item->id()], ['force_canonical' => true, 'query' => ['pretty_print' => true]]),
+                    'type' => 'Dataset',
+                    'label' => ['none' => [$controller->translate('Item metadata')]],
+                    'format' => 'application/ld+json',
+                    'profile' => 'https://www.w3.org/TR/json-ld/',
+                ],
+            ],
+            'metadata' => $this->getMetadata($item),
+        ];
+        // Manifest thumbnail.
+
+        if ($renderer == 'remoteFile') {
+            $thumbnailURL = $mediaData['thumbnail'];
+            if ($thumbnailURL) {
+                $manifest['thumbnail'] = [
+                    [
+                        'id' => $thumbnailURL,
+                        'type' => 'Image'
+                    ]
+                ];
+            }
+        } elseif ($renderer == 'remoteCompoundObject') {
+            foreach ($mediaData['components'] as $component) {
+                if ($component['thumbnail']) {
+                    $manifest['thumbnail'] = [
+                        [
+                            'id' => $component['thumbnail'],
+                            'type' => 'Image'
+                        ]
+                    ];
+                    break;
+                }
+            }
+        } else {
+            $manifest['thumbnail'] = [
+                [
+                    'id' => $media->thumbnailUrl('medium'),
+                    'type' => 'Image',
+                ],
+            ];
+        }
+        // Default required statement if no rights exist
+        $manifest['requiredStatement'] = ["label" => ["en" => ["Attribution"]], "value" => ["en" => ["This resource has been made available online by the Fashion Institute of Technology Gladys Marcus Library"]]];
+        $literalRights = $item->value('dcterms:rights', ['all' => true, 'type' => 'literal']);
+        $requiredStatement = [];
+        foreach ($literalRights as $literalRight) {
+            $requiredStatement[] =  $literalRight;
+        }
+        if ($requiredStatement) {
+            $manifest['requiredStatement'] = ["label" => ["en" => ["Rights"]], "value" => ["en" => [implode(". ", $requiredStatement)]]];
+        }
+        $rights = $item->value('dcterms:rights', ['all' => true, 'type' => 'uri']);
+        $hasrights = false;
+        // Get uri of rights statement, let creative commons take precedence
+        foreach ($rights as $rightsstatement) {
+            if (str_contains($rightsstatement->uri(), "creativecommons.org")) {
+                $manifest['rights'] = $rightsstatement->uri();
+                $hasrights = true;
+                break;
+            }
+        }
+        if (!$hasrights) {
+            foreach ($rights as $rightsstatement) {
+                if (str_contains($rightsstatement->uri(), "rightsstatements.org")) {
+                    $manifest['rights'] = $rightsstatement->uri();
+                    break;
+                }
+            }
+        }
+        // Manifest homepages (this item is assigned to these sites).
+        foreach ($item->sites() as $site) {
+            $manifest['homepage'][] = [
+                'id' => $controller->url()->fromRoute('site/resource-id', ['site-slug' => $site->slug(), 'controller' => 'item', 'action' => 'show', 'id' => $item->id()], ['force_canonical' => true]),
+                'type' => 'Text',
+                'label' => [
+                    'none' => [sprintf('Item in site: %s', $site->title())],
+                ],
+                'format' => 'text/html',
+            ];
+        }
+
+        if ($this->canvasTypeManager->has($renderer)) {
+            $canvasType = $this->canvasTypeManager->get($renderer);
+            // Compound objects return an array of canvases whereas other return just a single
+            if ($renderer == 'remoteCompoundObject') {
+                $canvases = $canvasType->getCanvas($media, $controller);
+                foreach ($canvases as $canvas) {
+                    // Allow modules to modify the canvas.
+                    $args = $this->triggerEvent(
+                        'iiif_presentation.3.media.canvas',
+                        [
+                            'canvas' => $canvas,
+                            'canvas_type' => $canvasType,
+                            'media' => $media,
+                        ]
+                    );
+                    // Set the canvas to the manifest.
+                    $manifest['items'][] = $args['canvas'];
+                }
+                // Search service for indexed material
+                if ($mediaData['indexed']) {
+                    $manifest["service"] = [
+                        "@context" => "http://iiif.io/api/search/1/context.json",
+                        "@id" => $url->fromRoute('iiif-search-1/media', ['media-id' => $mediaId], ['force_canonical' => true]),
+                        "profile" => "http://iiif.io/api/search/1/search"
+                    ];
+                }
+                // Compound object may have associated PDF file
+                // if ($media->mediaData()['pdf']) {
+                //     $presigned = $controller->viewHelpers()->get('s3presigned');
+                //     $manifest["rendering"][] = ['id' => $presigned($media->mediaData()['pdf']), 'type' => 'Text', 'label' => ['en' => ['PDF version']], 'format' => 'application/pdf'];
+                // }
+            } else {
+                $canvas = $canvasType->getCanvas($media, $controller);
+                if ($canvas) {
+                    // Allow modules to modify the canvas.
+                    $args = $this->triggerEvent(
+                        'iiif_presentation.3.media.canvas',
+                        [
+                            'canvas' => $canvas,
+                            'canvas_type' => $canvasType,
+                            'media' => $media,
+                        ]
+                    );
+                    // Set the canvas to the manifest.
+                    $manifest['items'][] = $args['canvas'];
+                }
+            }
         }
         // Allow modules to modify the manifest.
         $args = $this->triggerEvent(
@@ -290,6 +487,8 @@ class IiifPresentation extends AbstractIiifPresentation
         $response->getHeaders()->addHeaders([
             'Content-Type' => 'application/ld+json;profile="http://iiif.io/api/presentation/3/context.json"',
             'Access-Control-Allow-Origin' => '*',
+            'Cache-Control' => 'public, max-age=600, immutable',
+            'Pragma' => '',
         ]);
         $response->setContent(json_encode($content, JSON_PRETTY_PRINT));
         return $response;
