@@ -374,14 +374,16 @@ class IiifPresentation extends AbstractIiifPresentation
         }
         // Manifest homepages (this item is assigned to these sites).
         foreach ($item->sites() as $site) {
-            $manifest['homepage'][] = [
-                'id' => $controller->url()->fromRoute('site/resource-id', ['site-slug' => $site->slug(), 'controller' => 'item', 'action' => 'show', 'id' => $item->id()], ['force_canonical' => true]),
-                'type' => 'Text',
-                'label' => [
-                    'none' => [sprintf('Item in site: %s', $site->title())],
-                ],
-                'format' => 'text/html',
-            ];
+            if ($site->isPublic()) {
+                $manifest['homepage'][] = [
+                    'id' => $controller->url()->fromRoute('site/resource-id', ['site-slug' => $site->slug(), 'controller' => 'item', 'action' => 'show', 'id' => $item->id()], ['force_canonical' => true]),
+                    'type' => 'Text',
+                    'label' => [
+                        'none' => [sprintf('Item in site: %s', $site->title())],
+                    ],
+                    'format' => 'text/html',
+                ];
+            }
         }
 
         if ($this->canvasTypeManager->has($renderer)) {
@@ -454,7 +456,11 @@ class IiifPresentation extends AbstractIiifPresentation
         foreach ($resource->values() as $term => $propertyValues) {
             $label = $propertyValues['alternate_label'] ?? $propertyValues['property']->label();
             foreach ($propertyValues['values'] as $valueRep) {
-                $value = $valueRep->value();
+                if (($term == "dcterms:identifier") && ($valueRep->type() == 'uri') && $valueRep->value()) {
+                    $value = $valueRep->value() . ": " . $valueRep->uri();
+                } else {
+                    $value = $valueRep->value();
+                }
                 if (!is_string($value)) {
                     continue;
                 }
