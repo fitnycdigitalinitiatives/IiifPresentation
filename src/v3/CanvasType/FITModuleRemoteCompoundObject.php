@@ -14,14 +14,17 @@ class FITModuleRemoteCompoundObject implements CanvasTypeInterface
         if ($iiifEndpoint) {
             $mediaId = $media->id();
             $url = $controller->url();
-            foreach ($media->mediaData()['components'] as $index => $component) {
+            $presigned = $controller->viewHelpers()->get('s3presigned');
+            $mediaData = $media->mediaData();
+            $indexed = $mediaData['indexed'];
+            foreach ($mediaData['components'] as $index => $component) {
                 $accessURL = $component['access'];
                 if ($accessURL) {
                     $parsed_url = parse_url($accessURL);
                     $key = ltrim($parsed_url["path"], '/');
                     $extension = pathinfo($key, PATHINFO_EXTENSION);
                     if ($extension == 'tif') {
-                        $canvases[] = [
+                        $this_canvas = [
                             'id' => $url->fromRoute('iiif-presentation-3/media/canvas', ['media-id' => $mediaId, 'index' => $index + 1], ['force_canonical' => true], true),
                             'type' => 'Canvas',
                             'label' => [
@@ -76,6 +79,16 @@ class FITModuleRemoteCompoundObject implements CanvasTypeInterface
                                 ],
                             ],
                         ];
+                        if ($indexed && $component['ocr']) {
+                            $this_canvas['seeAlso'] = [
+                                [
+                                    "@id" => $presigned($component['ocr']),
+                                    "label" => "OCR (Alto XML)",
+                                    "format" => "application/xml+alto",
+                                ]
+                            ];
+                        }
+                        $canvases[] = $this_canvas;
                     }
                 }
             }
